@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clasificador de Ropa AI - Solo Archivos</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; max-width: 500px; width: 100%; }
+        
+        /* Área de visualización de la imagen cargada */
+        #display-container { 
+            margin: 20px 0; 
+            border: 2px dashed #bbb; 
+            border-radius: 8px; 
+            min-height: 250px; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            background: #fafafa; 
+            overflow: hidden; 
+        }
+        img { max-width: 100%; max-height: 400px; border-radius: 4px; display: none; }
+        
+        .controls { margin-bottom: 20px; }
+        
+        /* Botón de subida estilizado */
+        .btn-upload { 
+            padding: 15px 30px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            background: #34495e; 
+            color: white; 
+            transition: 0.3s; 
+            display: inline-block;
+            font-size: 16px;
+        }
+        .btn-upload:hover { background: #2c3e50; transform: translateY(-1px); }
+        
+        #label-container { 
+            margin-top: 20px; 
+            text-align: left; 
+            background: #ffffff; 
+            padding: 15px; 
+            border-radius: 8px; 
+            border: 1px solid #ddd;
+            border-left: 5px solid #4a90e2; 
+            min-height: 40px; 
+        }
+        .prediction-item { 
+            margin-bottom: 10px; 
+            font-size: 18px; 
+            color: #2c3e50;
+            display: flex;
+            justify-content: space-between;
+        }
+        .placeholder-text { color: #888; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Analizador de Ropa</h2>
+    <p>Sube una foto de tu prenda para identificarla</p>
+    
+    <div id="display-container">
+        <p id="msg-espera" class="placeholder-text">La imagen aparecerá aquí</p>
+        <img id="img-preview">
+    </div>
+
+    <div class="controls">
+        <label class="btn-upload">
+            📂 Seleccionar Imagen de PC
+            <input type="file" id="file-input" accept="image/*" style="display:none;">
+        </label>
+    </div>
+
+    <div id="label-container">
+        <span class="placeholder-text">Esperando que cargues una imagen...</span>
+    </div>
+</div>
+
+<script type="text/javascript">
+    // --- PEGA TU LINK AQUÍ ---
+    // Recuerda que debe terminar en barra diagonal "/"
+    const URL = "https://teachablemachine.withgoogle.com/models/XjCHLJYPP/"; 
+
+    let model, labelContainer, maxPredictions;
+
+    // Cargar el modelo automáticamente al abrir la página
+    async function loadModel() {
+        try {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+            console.log("Modelo de IA cargado correctamente.");
+        } catch (e) {
+            document.getElementById("label-container").innerHTML = "❌ Error: No se pudo cargar el modelo. Verifica tu URL.";
+        }
+    }
+
+    // Escuchar cuando el usuario selecciona un archivo
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        
+        if (file) {
+            // Si el modelo aún no termina de cargar, esperamos
+            if (!model) {
+                document.getElementById("label-container").innerHTML = "Cargando modelo, espera un momento...";
+                await loadModel();
+            }
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const img = document.getElementById('img-preview');
+                const msg = document.getElementById('msg-espera');
+                
+                img.src = event.target.result;
+                img.style.display = 'block';
+                msg.style.display = 'none';
+
+                // Realizar predicción cuando la imagen esté lista en el navegador
+                img.onload = async () => {
+                    await predict(img);
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    async function predict(imageElement) {
+        const prediction = await model.predict(imageElement);
+        labelContainer = document.getElementById("label-container");
+        labelContainer.innerHTML = ""; // Limpiar resultados anteriores
+        
+        let hayResultados = false;
+
+        for (let i = 0; i < maxPredictions; i++) {
+            const probabilidad = prediction[i].probability;
+            
+            // FILTRO: Solo mostrar si la probabilidad es mayor a 0 (0.1%)
+            if (probabilidad > 0.001) { 
+                hayResultados = true;
+                const porcentaje = (probabilidad * 100).toFixed(0);
+                
+                const div = document.createElement("div");
+                div.className = "prediction-item";
+                div.innerHTML = `<span>${prediction[i].className}</span> <strong>${porcentaje}%</strong>`;
+                labelContainer.appendChild(div);
+            }
+        }
+
+        if (!hayResultados) {
+            labelContainer.innerHTML = "<span class='placeholder-text'>No se identificó ninguna prenda con seguridad.</span>";
+        }
+    }
+
+    // Iniciar carga del modelo
+    loadModel();
+</script>
+
+</body>
+</html>
